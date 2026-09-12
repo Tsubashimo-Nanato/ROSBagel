@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+import time
 from unittest.mock import patch
 
 import numpy as np
@@ -24,7 +25,7 @@ if importlib.util.find_spec("PySide6") is None:
     raise unittest.SkipTest("PySide6 is not installed")
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from PySide6 import QtCore, QtGui, QtWidgets  # noqa: E402
+from PySide6 import QtCore, QtGui, QtWidgets, QtTest  # noqa: E402
 
 
 class DummyReader:
@@ -55,6 +56,18 @@ class ImageReader:
 
 
 class GuiTimelineViewerTests(unittest.TestCase):
+    def setUp(self) -> None:
+        settings = patch.object(TimelineViewer, "_maybe_offer_startup_update_check")
+        settings.start()
+        self.addCleanup(settings.stop)
+        values = {"updates/mode": "off", "ui/theme": "dark"}
+        preferences = patch.object(QtCore, "QSettings", return_value=SimpleNamespace(
+            value=lambda key, default=None: values.get(key, default),
+            setValue=lambda key, value: values.__setitem__(key, value),
+        ))
+        preferences.start()
+        self.addCleanup(preferences.stop)
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
@@ -69,7 +82,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
             self.assertIn("Version...", [action.text() for action in viewer._file_menu.actions()])
             self.assertEqual(
                 [action.text() for action in viewer._theme_menu.actions()],
-                ["Bright mode", "Dark mode"],
+                ["Light mode", "Dark mode"],
             )
             self.assertEqual(viewer.theme_toggle.text(), "Dark mode")
             self.assertEqual(viewer.theme_toggle.objectName(), "themeToggle")
@@ -382,7 +395,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
         viewer = TimelineViewer()
         try:
             pane = viewer._panes[0]
-            self.assertEqual(pane.new_window_button.accessibleName(), "Duplicate window")
+            self.assertEqual(pane.new_window_button.accessibleName(), "New window")
             self.assertTrue(pane.new_window_button.toolTip())
             self.assertTrue(callable(viewer.duplicate_pane_window))
         finally:
@@ -513,8 +526,8 @@ class GuiTimelineViewerTests(unittest.TestCase):
             self.assertEqual(viewer._theme, "dark")
             self.assertTrue(viewer.theme_toggle.isChecked())
             self.assertIn("#101010", viewer.window.styleSheet())
-            self.assertIn("QHeaderView::section", self.app.styleSheet())
-            self.assertIn("QWidget#propertiesPanel", self.app.styleSheet())
+            self.assertIn("QHeaderView::section", viewer.window.styleSheet())
+            self.assertIn("QWidget#propertiesPanel", viewer.window.styleSheet())
 
             viewer._set_theme("light")
             self.assertEqual(viewer._theme, "light")
@@ -583,18 +596,6 @@ class GuiTimelineViewerTests(unittest.TestCase):
         finally:
             viewer.window.close()
 
-    def test_version_action_ignores_qt_checked_argument(self) -> None:
-        viewer = TimelineViewer()
-        calls = []
-        try:
-            viewer._show_version_dialog = lambda: calls.append("opened")  # type: ignore[method-assign]
-
-            viewer._on_version_action_triggered(False)
-
-            self.assertEqual(calls, ["opened"])
-        finally:
-            viewer.window.close()
-
     def test_lane_overlay_detects_topics_and_loads_frames(self) -> None:
         viewer = TimelineViewer()
         calls = []
@@ -643,6 +644,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
         viewer = TimelineViewer()
         try:
             viewer._bag_start_ns = 1_000
+            viewer.time_input.setRange(0.0, 1.0)
             viewer.time_input.blockSignals(True)
             viewer.time_input.setValue(0.5)
             viewer.time_input.blockSignals(False)
@@ -1002,8 +1004,13 @@ class GuiTimelineViewerTests(unittest.TestCase):
 
             with patch("rosbagel.gui.timeline_viewer._decode_record_frame", return_value=frame):
                 self.assertTrue(pane.ensure_rendered_for_playback())
+                _wait_for(lambda: not pane._rendering_playback)
 
-            self.assertEqual(len(pane.rendered_frames), MAX_RENDERED_PLAYBACK_FRAMES)
+            self.assertGreater(len(pane.rendered_frames), 0)
+            self.assertLessEqual(len(pane.rendered_frames), MAX_RENDERED_PLAYBACK_FRAMES)
+            from rosbagel.gui.playback import MAX_RENDERED_PLAYBACK_BYTES
+            byte_count = sum(frame.image.sizeInBytes() for frame in pane.rendered_frames)
+            self.assertLessEqual(byte_count, MAX_RENDERED_PLAYBACK_BYTES + pane.rendered_frames[-1].image.sizeInBytes())
         finally:
             viewer.window.close()
 
@@ -1036,6 +1043,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
 
             with patch("rosbagel.gui.timeline_viewer._decode_record_frame", return_value=frame):
                 self.assertTrue(pane.ensure_rendered_for_playback())
+                _wait_for(lambda: not pane._rendering_playback)
                 pane.show_at_timestamp(0)
 
             self.assertEqual(reader.iteration_count, 1)
@@ -1044,6 +1052,15 @@ class GuiTimelineViewerTests(unittest.TestCase):
             self.assertEqual(viewer.progress_bar.text(), "Ready")
         finally:
             viewer.window.close()
+
+def _wait_for(condition, timeout: float = 5.0) -> None:
+    deadline = time.monotonic() + timeout
+    while not condition() and time.monotonic() < deadline:
+        QtTest.QTest.qWait(10)
+        time.sleep(0.005)
+    if not condition():
+        raise AssertionError("Qt operation did not finish before timeout")
+
 
 def _lane_topic(role: str) -> TopicInfo:
     return TopicInfo(

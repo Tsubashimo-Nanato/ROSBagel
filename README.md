@@ -108,9 +108,14 @@ bagel upgrade --yes
 
 ## GUI Development
 
-The timeline viewer is a Windows-oriented, offline visualization workspace. Current work focuses on predictable topic assignment, split views, bounded image playback caches, lane-line and point-cloud navigation, and stable dock behavior.
+The timeline viewer is under active development. Open a bag folder or file from **File**, then double-click a topic or drag a selection into a view. Checked topics can be dragged together; point clouds share one view, while incompatible topics get separate views.
 
-It is intentionally view-only: this is not a live ROS subscriber, recorder, node-graph inspector, or full RViz2 replacement. The optional 3D point-cloud renderer also depends on working VisPy/OpenGL support; the rest of the application remains usable without it.
+- Split the selected view with **+** and resize the divider. Drag a view title to rearrange it, detach it, or dock it beside another view; the drop area is highlighted. **New window** moves the view; **Duplicate window** in the context menu creates a copy.
+- Scrub, play, or step along the shared timeline. Image loading and export run in the background. Each image cache holds at most 300 frames, with a 96 MiB budget plus the final admitted frame.
+- Edit the selected topic's visibility, opacity, and time offset in **Properties**. Point clouds also have color, point-size, and decimation controls. Use **Fit** to resume automatic point framing after panning or zooming.
+- Switch **Dark mode** in the timeline, or recover hidden panels with **Windows > Reset layout**. Export starts with your checked topics selected.
+
+It is intentionally view-only: this is not a live ROS subscriber, recorder, node-graph inspector, or full RViz2 replacement. The optional 3D renderer requires working VisPy/OpenGL support. A pannable, zoomable XY projection is available when that renderer cannot initialize, including offscreen environments.
 
 Run the GUI directly:
 
@@ -132,7 +137,7 @@ These references describe data provenance and project context. They do not imply
 - Codec availability for MP4 varies by OpenCV build and platform.
 - The SQLite fallback cannot deserialize CDR messages; use the `rosbags` backend for decoded exports.
 - Custom message support depends on definitions available to `rosbags` from the bag metadata.
-- Large, high-resolution GUI image topics can pause briefly when a bounded playback window refreshes.
+- Playback waits for an image cache refill; the GUI remains responsive. Cancelling an export can leave partial files in its output directory.
 - Bags may contain private camera, sensor, map, or laboratory data. Review exports before publishing them.
 
 ## Maintainer
