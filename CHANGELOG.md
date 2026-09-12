@@ -6,6 +6,11 @@ All notable changes for this project will be documented in this file.
 
 ### Added
 
+- GUI Analysis workflows: background bag scans, searchable coverage/frequency/format reports, manifest/topic CSV saves, nearest-message comparisons and topic duration.
+- Structured-message inspector with bounded field/raw previews, previous/next message navigation, full JSON saves, and numeric-field plotting.
+- Generic multi-topic numeric charts with editable field paths, up to 16 series, bounded full-range extrema sampling, timeline seeking, pan/zoom/fit, and PNG/CSV saves.
+- Versioned GUI workspace files restoring split layouts, detached views, topic settings, chart fields and time; recent bags and Close bag actions.
+- Batch GUI exports with shared, per-topic or scan-based suggested formats, select-all/clear, and results/warnings tables. View image capture is available from the view context menu.
 - GUI bag-file picker, layout reset, point-fit controls, per-topic display editing, and a software XY point-cloud renderer.
 - Local splitter resizing, view-title drag/drop indicators, and moving views between detached windows and the main layout.
 - Background bag opening, previews, bounded image loading, and cancellable exports with checked-topic preselection.
@@ -30,6 +35,11 @@ All notable changes for this project will be documented in this file.
 ### Removed
 
 - Removed synchronous image/export loops and their GUI event-pumping progress helper. Preview and export IO now share one worker thread, including SQLite reader cleanup.
+
+### Changed
+
+- The timeline is now a global control bar and remains usable on analysis pages. Lane overlay is opt-in through Windows instead of opening automatically for AIformula bags.
+- The GUI's Save sidecar action is replaced by Save workspace with an explicit destination. Existing core display-settings serialization remains unchanged; source bags are not used as the default workspace output location.
 
 ## [1.6.2] - 2026-07-14
 

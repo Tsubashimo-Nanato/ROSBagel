@@ -17,7 +17,7 @@ if importlib.util.find_spec("PySide6") is None:
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PySide6 import QtCore, QtGui, QtTest, QtWidgets
 
-from rosbagel.core.models import MessageRecord, TopicInfo
+from rosbagel.core.models import ExportResult, MessageRecord, TopicInfo
 from rosbagel.core.preview import PointCloudPreview, TopicDisplaySettings
 from rosbagel.gui.playback import PlaybackWindow, RenderedFrame
 from rosbagel.gui.point_plot import create_point_plot
@@ -464,7 +464,7 @@ class GuiInteractionTests(unittest.TestCase):
             with kwargs["progress_factory"]("Exporting points", 2) as advance:
                 advance(2)
             exported.append((name, fmt, out))
-            return object()
+            return ExportResult(name, fmt, str(out), message_count=2)
 
         viewer.session.export_topic = export
 
@@ -583,7 +583,7 @@ class GuiInteractionTests(unittest.TestCase):
 
         session = SimpleNamespace(open_bag=opening, reader=SimpleNamespace(get_time_bounds=lambda: (10, 250_000_010)),
                                   close=lambda: None, topics=[topic], bag_path=Path("test.bag"), backend="auto",
-                                  list_topics=lambda: [topic])
+                                  list_topics=lambda: [topic], manifest=None)
         try:
             with patch("rosbagel.gui.timeline_viewer.Session", return_value=session):
                 viewer.open_bag("test.bag")

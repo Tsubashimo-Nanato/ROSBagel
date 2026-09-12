@@ -115,6 +115,16 @@ GUI 仍在积极开发中。从 **File** 打开 bag 文件夹或文件后，双�
 - **Properties** 修改所选 topic 的可见性、透明度和时间偏移；普通点云还可调整颜色、点大小和采样密度。平移或缩放后，用 **Fit** 恢复自动取景。
 - 时间线上的 **Dark mode** 切换明暗主题；**Windows > Reset layout** 恢复隐藏面板。导出对话框自动选中左侧已勾选的 topic。
 
+**Analysis** 补齐离线分析工作流：
+
+- **Bag report / Scan bag**：查看消息数量、覆盖时段、平均频率、兼容导出格式和警告，保存 manifest 或 CSV。**Inspect all at current time** 比较各话题最近消息的时间偏差。
+- **Message inspector**：搜索消息字段、查看原始字节、前后逐条定位、保存完整消息 JSON。选择数值字段即可绘图，也可通过 **Numeric chart** 的 **+** 手动输入字段路径。
+- **Numeric chart**：最多叠加 16 个跨话题字段，按完整时间范围保留极值采样；支持时间游标、平移、缩放、自动取景和 PNG/CSV 保存。CSV 保存的是图中的采样点，逐条完整数据请使用 topic 导出。
+- **File > Save/Open workspace**：恢复分屏、独立窗口、勾选话题、显示设置、图表字段和时间位置。File 还提供最近打开和 Close bag；工作区文件与源 bag 分开保存。
+- **Export**：统一格式、每话题单独格式，或扫描后使用 core 推荐的格式组合；结果及警告显示在 Bag analysis。Select all 选择完整话题列表。
+
+切换分析页面后，全局时间线仍可操作。AIformula 车道线 dock 在 **Windows** 中按需打开，普通 ROS 消息不依赖它。右键 view 可以进入消息检查或保存视图图片。
+
 它有意保持只读：这不是实时 ROS subscriber、recorder、节点图检查器或完整的 RViz2 替代品。可选 3D 渲染依赖 VisPy/OpenGL；无法初始化时（包括离屏环境），使用可平移、缩放的 XY 点云投影。
 
 直接启动 GUI：

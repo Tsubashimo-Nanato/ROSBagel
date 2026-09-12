@@ -77,7 +77,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
         try:
             self.assertEqual(
                 [action.text() for action in viewer.window.menuBar().actions()],
-                ["File", "Theme", "Windows"],
+                ["File", "Theme", "Windows", "Analysis"],
             )
             self.assertIn("Version...", [action.text() for action in viewer._file_menu.actions()])
             self.assertEqual(
@@ -88,7 +88,7 @@ class GuiTimelineViewerTests(unittest.TestCase):
             self.assertEqual(viewer.theme_toggle.objectName(), "themeToggle")
             self.assertEqual(
                 list(viewer._dock_widgets),
-                ["Topic list", "Main view", "Lane line overlay", "Properties", "Output"],
+                ["Topic list", "Main view", "Lane line overlay", "Properties", "Output", "Message inspector", "Bag analysis", "Numeric chart"],
             )
             for dock in viewer._dock_widgets.values():
                 self.assertTrue(dock.toggleViewAction().isCheckable())

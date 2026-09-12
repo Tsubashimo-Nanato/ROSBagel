@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from rosbagel.core.export_policy import compatible_export_formats
+from rosbagel.core.export_policy import compatible_export_formats, default_export_formats
 from rosbagel.core.jobs import CancelledError
 
 
@@ -31,7 +30,13 @@ def show_export_dialog(viewer: Any) -> None:
     search = QtWidgets.QLineEdit()
     search.setPlaceholderText("Search topics")
     search.setClearButtonEnabled(True)
-    layout.addWidget(search)
+    select_row = QtWidgets.QHBoxLayout()
+    select_row.addWidget(search, 1)
+    select_all = QtWidgets.QPushButton("Select all")
+    clear_all = QtWidgets.QPushButton("Clear")
+    select_row.addWidget(select_all)
+    select_row.addWidget(clear_all)
+    layout.addLayout(select_row)
     topic_list = QtWidgets.QListWidget()
     topic_list.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.NoSelection)
     checked = set(viewer.topic_tree._checked_topics())
@@ -44,7 +49,18 @@ def show_export_dialog(viewer: Any) -> None:
         topic_list.addItem(item)
     layout.addWidget(topic_list, 1)
     form = QtWidgets.QFormLayout()
+    mode = QtWidgets.QComboBox()
+    mode.setAccessibleName("Export format mode")
+    mode.addItems(("Shared format", "Per-topic formats", "Suggested formats"))
     format_box = QtWidgets.QComboBox()
+    per_topic = QtWidgets.QTableWidget(0, 2)
+    per_topic.setHorizontalHeaderLabels(("Topic", "Format"))
+    per_topic.horizontalHeader().setStretchLastSection(True)
+    per_topic.setColumnWidth(0, 480)
+    per_topic.setMaximumHeight(180)
+    per_topic.setEditTriggers(QtWidgets.QAbstractItemView.EditTrigger.NoEditTriggers)
+    layout.addWidget(per_topic)
+    topic_formats: dict[str, str] = {}
     out_edit = QtWidgets.QLineEdit()
     out_edit.setAccessibleName("Output directory")
     out_row = QtWidgets.QHBoxLayout()
@@ -54,6 +70,7 @@ def show_export_dialog(viewer: Any) -> None:
     fps = QtWidgets.QDoubleSpinBox()
     fps.setRange(1.0, 240.0)
     fps.setValue(30)
+    form.addRow("Format mode", mode)
     form.addRow("Format", format_box)
     form.addRow("Output directory", out_row)
     form.addRow("MP4 FPS", fps)
@@ -77,11 +94,25 @@ def show_export_dialog(viewer: Any) -> None:
 
     def refresh_summary() -> None:
         selected = selected_topics()
-        fmt = format_box.currentText()
+        formats = [fmt for name, fmt in export_pairs()]
         out = out_edit.text().strip()
-        export_button.setEnabled(bool(selected and fmt and out))
-        fps.setEnabled(fmt == "mp4")
-        summary.setText(f"{len(selected)} topic(s) selected" if selected else "No topics selected")
+        needs_scan = mode.currentText() == "Suggested formats" and session.manifest is None
+        export_button.setEnabled(bool(formats and out and not needs_scan))
+        fps.setEnabled("mp4" in formats)
+        summary.setText("Scan the bag in Analysis to determine suggested formats." if needs_scan else
+                        f"{len(selected)} topic(s), {len(formats)} export(s)" if selected else "No topics selected")
+
+    def export_pairs() -> list[tuple[str, str]]:
+        result = []
+        for name in selected_topics():
+            if mode.currentText() == "Suggested formats":
+                info = viewer._topic_info_by_name[name]
+                result.extend((name, fmt) for fmt in default_export_formats(info) if info.message_count)
+            else:
+                fmt = topic_formats.get(name, "") if mode.currentText() == "Per-topic formats" else format_box.currentText()
+                if fmt:
+                    result.append((name, fmt))
+        return result
 
     def refresh_formats() -> None:
         selected = selected_topics()
@@ -94,7 +125,29 @@ def show_export_dialog(viewer: Any) -> None:
         format_box.addItems(sorted(common or []))
         if current in (common or set()):
             format_box.setCurrentText(current)
+        format_box.setEnabled(mode.currentText() == "Shared format")
+        per_topic.setVisible(mode.currentText() == "Per-topic formats")
+        per_topic.setRowCount(len(selected))
+        for row, name in enumerate(selected):
+            options = compatible_export_formats(viewer._topic_info_by_name[name])
+            topic_formats.setdefault(name, options[0] if options else "")
+            combo = QtWidgets.QComboBox()
+            combo.addItems(options)
+            combo.setCurrentText(topic_formats[name])
+            def changed(value, topic=name):
+                topic_formats[topic] = value
+                refresh_summary()
+            combo.currentTextChanged.connect(changed)
+            per_topic.setItem(row, 0, QtWidgets.QTableWidgetItem(name))
+            per_topic.setCellWidget(row, 1, combo)
         refresh_summary()
+
+    def set_all(checked: bool) -> None:
+        blocker = QtCore.QSignalBlocker(topic_list)
+        for index in range(topic_list.count()):
+            topic_list.item(index).setCheckState(QtCore.Qt.CheckState.Checked if checked else QtCore.Qt.CheckState.Unchecked)
+        del blocker
+        refresh_formats()
 
     def filter_topics(text: str) -> None:
         for index in range(topic_list.count()):
@@ -110,48 +163,36 @@ def show_export_dialog(viewer: Any) -> None:
         nonlocal task
         out = Path(out_edit.text().strip()).expanduser()
         selected = selected_topics()
-        fmt = format_box.currentText()
-        if not selected or not fmt or not out_edit.text().strip():
+        pairs = export_pairs()
+        if not pairs or not out_edit.text().strip():
             return
         if out.exists() and not out.is_dir():
             summary.setText(f"Output is not a directory: {out}")
             return
         answer = QtWidgets.QMessageBox.question(
-            dialog, "Confirm export", f"Export {len(selected)} topic(s) as {fmt} to:\n{out}?",
+            dialog, "Confirm export", f"Run {len(pairs)} export(s) for {len(selected)} topic(s) to:\n{out}?",
             QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
             QtWidgets.QMessageBox.StandardButton.No,
         )
         if answer != QtWidgets.QMessageBox.StandardButton.Yes:
             return
-        selections = [session.prepare_export_selection(name, fmt, out, fps=fps.value()) for name in selected]
+        selections = [session.prepare_export_selection(name, fmt, out, fps=fps.value()) for name, fmt in pairs]
         completed: list[Any] = []
         failures: list[str] = []
         viewer._pause_playback()
         viewer._exporting = True
         cancel_button.setText("Cancel")
-        for widget in (topic_list, search, format_box, out_edit, browse, fps, export_button):
+        for widget in (topic_list, search, format_box, out_edit, browse, fps, export_button, mode, per_topic, select_all, clear_all):
             widget.setEnabled(False)
         progress.setVisible(True)
         progress.setRange(0, 0)
 
         def work(context: Any) -> None:
-            @contextmanager
-            def progress_factory(label: str, total: int | None) -> Any:
-                value = 0
-
-                def advance(amount: int = 1) -> None:
-                    nonlocal value
-                    value += amount
-                    context.report(label, value, total)
-
-                context.report(label, 0, total)
-                yield advance
-
             for selection in selections:
                 context.throw_if_cancelled()
                 try:
                     completed.append(session.export_topic(selection.topic, selection.format, selection.out_dir,
-                                                          fps=selection.fps, progress_factory=progress_factory))
+                                                          fps=selection.fps, progress_factory=context.progress_factory))
                 except CancelledError:
                     raise
                 except Exception as exc:
@@ -169,18 +210,19 @@ def show_export_dialog(viewer: Any) -> None:
             viewer._exporting = False
             for message in failures:
                 viewer._log(f"Export failed: {message}")
-            message = f"Exported {len(completed)}/{len(selections)} topic(s) to {out}"
+            message = f"Completed {len(completed)}/{len(selections)} exports to {out}"
             if cancelled:
                 message += ". Cancelled; partial output files may remain."
             elif failures:
                 message += f". {len(failures)} failed; see Output."
             viewer._log(message)
+            viewer.workflows.record_exports(completed, failures)
             summary.setText(message)
             progress.setVisible(False)
             cancel_button.setEnabled(True)
             cancel_button.setText("Close")
             if failures or cancelled:
-                for widget in (topic_list, search, format_box, out_edit, browse):
+                for widget in (topic_list, search, format_box, out_edit, browse, mode, per_topic, select_all, clear_all):
                     widget.setEnabled(True)
                 refresh_formats()
                 summary.setText(message)
@@ -195,6 +237,9 @@ def show_export_dialog(viewer: Any) -> None:
                                        on_cancel=lambda: finish(cancelled=True))
 
     search.textChanged.connect(filter_topics)
+    select_all.clicked.connect(lambda: set_all(True))
+    clear_all.clicked.connect(lambda: set_all(False))
+    mode.currentTextChanged.connect(lambda _: refresh_formats())
     topic_list.itemChanged.connect(lambda _: refresh_formats())
     format_box.currentTextChanged.connect(lambda _: refresh_summary())
     out_edit.textChanged.connect(lambda _: refresh_summary())

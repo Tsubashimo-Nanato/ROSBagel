@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import CancelledError as FutureCancelledError, Future, ThreadPoolExecutor
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from threading import Event, Lock
 from typing import Any, Callable
@@ -23,6 +24,18 @@ class TaskContext(CancellationToken):
         with self._lock:
             progress, self._progress = self._progress, None
         return progress
+
+    @contextmanager
+    def progress_factory(self, label: str, total: int | None):
+        value = 0
+
+        def advance(amount: int = 1) -> None:
+            nonlocal value
+            value += amount
+            self.report(label, value, total)
+
+        self.report(label, 0, total)
+        yield advance
 
 
 @dataclass

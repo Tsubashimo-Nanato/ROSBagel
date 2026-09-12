@@ -23,7 +23,6 @@ from rosbagel.core.preview import (
     PreviewService,
     PreviewSessionSettings,
     TopicDisplaySettings,
-    save_preview_settings,
 )
 from rosbagel.core.session import Session
 from rosbagel.core.update_check import UpdateInfo, check_for_update, current_version
@@ -98,6 +97,7 @@ class TimelineViewer:
         self._properties_topic: str | None = None
         self._expanded_before_search: set[int] | None = None
         self._owned_sessions: list[Session] = []
+        self.workflows: Any = None
 
         self.window = _create_drop_window(self.QtWidgets, self.QtCore, self.open_bag, self._close)
         self._io_tasks = GuiTaskRunner(self.QtCore, self.window)
@@ -105,6 +105,8 @@ class TimelineViewer:
         self.window.setAttribute(self.QtCore.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.window.resize(1280, 760)
         self._build_ui()
+        from rosbagel.gui.workflows import GuiWorkflows
+        self.workflows = GuiWorkflows(self)
         if bag_path is not None:
             self.open_bag(bag_path)
         self.startup_timer = self.QtCore.QTimer(self.window)
@@ -116,7 +118,7 @@ class TimelineViewer:
         self.window.show()
         self._queue_autosize_docks()
 
-    def open_bag(self, bag_path: str | Path) -> None:
+    def open_bag(self, bag_path: str | Path, *, backend: str | None = None) -> None:
         if self._opening or self._exporting or self._closed:
             return
         path = Path(bag_path)
@@ -125,10 +127,11 @@ class TimelineViewer:
         self.preview_timer.stop()
         for pane in self._all_panes():
             pane.cancel_pending()
+        self.workflows.clear_tasks()
         self._opening = True
         self._set_bag_controls_enabled(False)
         self._start_progress(f"Opening {path.name}", None)
-        backend = self.session.backend
+        backend = backend or self.session.backend
 
         def work(context: Any) -> tuple[Session, tuple[int | None, int | None]]:
             session = Session(backend=backend)
@@ -175,12 +178,15 @@ class TimelineViewer:
             self._log(f"Opened {path} ({len(topics)} topics)")
             self._finish_progress()
             self.window.setWindowTitle(f"{path.name} - ROSBagel Timeline Viewer")
+            self.workflows.on_bag()
             self._io_tasks.submit("close-previous", lambda _ctx: previous.close(), lambda _: None, self._log)
 
         def failed(message: str) -> None:
             self._opening = False
+            self.workflows.pending_workspace = None
             self._set_bag_controls_enabled(self.session.reader is not None)
             self._finish_progress("Open failed")
+            self.workflows.on_time(self._current_timestamp_ns())
             self._show_warning(f"Could not open {path}: {message}")
 
         self._io_tasks.submit("open", work, finish, failed)
@@ -212,6 +218,8 @@ class TimelineViewer:
         self._io_tasks.close(cleanup)
 
     def _set_bag_controls_enabled(self, enabled: bool) -> None:
+        if self.workflows is not None:
+            self.workflows.set_enabled(enabled)
         for widget in (self.play_button, self.step_button, self.time_slider, self.time_input, self.rate_box):
             widget.setEnabled(enabled and self.time_input.maximum() > 0)
         self.topic_panel.setEnabled(enabled)
@@ -559,8 +567,8 @@ class TimelineViewer:
         self.sync_offset = QtWidgets.QDoubleSpinBox()
         self.sync_offset.setRange(-3600.0, 3600.0)
         self.sync_offset.setDecimals(3)
-        self.save_settings_button = QtWidgets.QPushButton("Save sidecar")
-        self.save_settings_button.clicked.connect(self._save_sidecar)
+        self.save_settings_button = QtWidgets.QPushButton("Save workspace...")
+        self.save_settings_button.clicked.connect(lambda: self.workflows.save_workspace())
         self.properties_topic_label = QtWidgets.QLabel("No topic selected")
         self.properties_topic_label.setWordWrap(True)
         self.properties_topic_label.setMinimumWidth(0)
@@ -631,7 +639,13 @@ class TimelineViewer:
         timeline.addWidget(QtWidgets.QLabel("Rate"))
         timeline.addWidget(self.rate_box)
         timeline.addWidget(self.theme_toggle)
-        main_layout.addWidget(timeline_group)
+        self.timeline_toolbar = QtWidgets.QToolBar("Timeline", self.window)
+        self.timeline_toolbar.setObjectName("timelineToolbar")
+        self.timeline_toolbar.setMovable(False)
+        self.timeline_toolbar.addWidget(timeline_group)
+        timeline_group.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Preferred)
+        self.window.addToolBar(QtCore.Qt.ToolBarArea.BottomToolBarArea, self.timeline_toolbar)
+        self._windows_menu.addAction(self.timeline_toolbar.toggleViewAction())
 
         output_panel = QtWidgets.QWidget()
         output_panel.setObjectName("outputPanel")
@@ -743,6 +757,7 @@ class TimelineViewer:
 
     def _reset_dock_layout(self) -> None:
         QtCore = self.QtCore
+        self.timeline_toolbar.show()
         self._maximized_pane = None
         for dock in self._dock_widgets.values():
             dock.setFloating(False)
@@ -752,7 +767,10 @@ class TimelineViewer:
         self.window.addDockWidget(QtCore.Qt.DockWidgetArea.BottomDockWidgetArea, self.output_dock)
         self.window.splitDockWidget(self.main_view_dock, self.lane_overlay_dock, QtCore.Qt.Orientation.Vertical)
         self.window.splitDockWidget(self.main_view_dock, self.properties_dock, QtCore.Qt.Orientation.Horizontal)
-        self.lane_overlay_dock.setVisible(bool(self._lane_topics_by_role))
+        self.lane_overlay_dock.hide()
+        if self.workflows is not None:
+            for dock in self.workflows.docks:
+                dock.hide()
         self._layout_panes()
 
     def _build_theme_menu(self, menu_bar: Any) -> None:
@@ -1278,7 +1296,8 @@ class TimelineViewer:
         self._lane_overlay_data = None
         self.lane_overlay.set_topics(self._lane_topics_by_role)
         self._set_lane_selection(list(self._lane_topics_by_role))
-        self.lane_overlay_dock.setVisible(bool(self._lane_topics_by_role))
+        if not self._lane_topics_by_role:
+            self.lane_overlay_dock.hide()
         if not self._lane_topics_by_role:
             return
         self._start_lane_overlay_load(generation)
@@ -1459,6 +1478,8 @@ class TimelineViewer:
         self.theme_toggle.blockSignals(False)
 
     def _apply_theme(self) -> None:
+        if self.workflows is not None:
+            self.workflows.apply_theme()
         palette = _theme_palette(self._theme)
         stylesheet = _theme_stylesheet(palette)
         app = self.QtWidgets.QApplication.instance()
@@ -1619,6 +1640,7 @@ class TimelineViewer:
         timestamp_ns = self._current_timestamp_ns()
         if timestamp_ns is None:
             return
+        self.workflows.on_time(timestamp_ns)
         if self.preview is not None:
             for pane in self._all_panes():
                 if pane.isVisible():
@@ -1870,22 +1892,6 @@ class TimelineViewer:
     def _show_export_dialog(self) -> None:
         from rosbagel.gui.export_dialog import show_export_dialog
         show_export_dialog(self)
-
-    def _save_sidecar(self) -> None:
-        if not self.settings.bag_path:
-            return
-        bag_path = Path(self.settings.bag_path)
-        output_path = (
-            bag_path / "rosbagel_session.json"
-            if bag_path.is_dir()
-            else bag_path.with_name("rosbagel_session.json")
-        )
-        try:
-            save_preview_settings(self.settings, output_path)
-        except (OSError, ValueError) as exc:
-            self._show_warning(f"Could not save {output_path}: {exc}")
-            return
-        self._log(f"Saved {output_path}")
 
     def _all_panes(self) -> list[Any]:
         return [*self._panes, *self._window_panes]
@@ -2636,6 +2642,10 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
 
         def contextMenuEvent(self, event: Any) -> None:
             menu = QtWidgets.QMenu(self)
+            inspect = menu.addAction("Inspect message / plot fields")
+            inspect.setEnabled(self.topic is not None)
+            snapshot = menu.addAction("Save view image...")
+            menu.addSeparator()
             split_horizontal = menu.addAction("Split horizontally")
             split_vertical = menu.addAction("Split vertically")
             menu.addSeparator()
@@ -2643,7 +2653,16 @@ def _create_view_pane_class(QtWidgets: Any, QtCore: Any, QtGui: Any) -> type:
             duplicate = menu.addAction("Duplicate window")
             delete = menu.addAction("Delete view")
             action = menu.exec(event.globalPos())
-            if action == split_horizontal:
+            if action == snapshot:
+                path, _ = QtWidgets.QFileDialog.getSaveFileName(self, "Save view image", "view.png", "PNG image (*.png)")
+                if path and not self.grab().save(path, "PNG"):
+                    self.owner._show_warning(f"Could not save {path}")
+            elif action == inspect:
+                workflows = self.owner.workflows
+                workflows.inspector.topic_box.setCurrentText(self.topic)
+                workflows.show_dock(workflows.inspector_dock)
+                workflows.inspector.reload()
+            elif action == split_horizontal:
                 self.owner.split_pane(self, "horizontal")
             elif action == split_vertical:
                 self.owner.split_pane(self, "vertical")

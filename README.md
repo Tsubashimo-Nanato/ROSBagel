@@ -115,6 +115,16 @@ The timeline viewer is under active development. Open a bag folder or file from 
 - Edit the selected topic's visibility, opacity, and time offset in **Properties**. Point clouds also have color, point-size, and decimation controls. Use **Fit** to resume automatic point framing after panning or zooming.
 - Switch **Dark mode** in the timeline, or recover hidden panels with **Windows > Reset layout**. Export starts with your checked topics selected.
 
+**Analysis** adds the rest of the offline workflow:
+
+- **Bag report / Scan bag**: topic counts, coverage, mean frequency, format compatibility, warnings, and saved manifest/CSV reports. **Inspect all at current time** compares nearest-message offsets across topics.
+- **Message inspector**: searchable fields, raw bytes, previous/next messages, and full-message JSON saves. Select numeric fields and plot them, or enter a field path with **+** in **Numeric chart**.
+- **Numeric chart**: up to 16 fields across topics, full-time-range extrema sampling, a shared timeline cursor, pan/zoom/fit, and PNG/CSV output. CSV contains the plotted samples; use topic export for every message.
+- **File > Save/Open workspace** restores splits, detached views, checked topics, display settings, chart fields and playback position. Recent bags and Close bag are in File. Workspace files are separate from source bags.
+- **Export** supports one shared format, individual topic formats, or the core's suggested formats after a scan. Results and warnings appear in Bag analysis; Select all includes the full topic list.
+
+The timeline stays available when switching analysis pages. The AIformula lane dock is optional under **Windows**; ordinary ROS messages do not need it. Right-click a view to inspect its message or save its image.
+
 It is intentionally view-only: this is not a live ROS subscriber, recorder, node-graph inspector, or full RViz2 replacement. The optional 3D renderer requires working VisPy/OpenGL support. A pannable, zoomable XY projection is available when that renderer cannot initialize, including offscreen environments.
 
 Run the GUI directly:
