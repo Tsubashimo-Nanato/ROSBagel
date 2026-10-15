@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-[![Release](https://img.shields.io/badge/release-v1.6.2-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/releases)
+[![Version](https://img.shields.io/badge/version-v1.6.3-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/tree/v1.6.3)
 ![Python](https://img.shields.io/badge/python-3.10--3.13-3776ab)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-4c1)](LICENSE)
 ![GUI](https://img.shields.io/badge/GUI-active_development-ef4444)
@@ -46,7 +46,7 @@ install.bat gui
 | 可视化 | 时间线拖动、图像播放、分屏、车道线叠加、点云预览和明暗主题 |
 | 保持离线 | 通过 `rosbags` 读取 rosbag1/rosbag2；必要时使用 SQLite 读取原始 ROS 2 数据 |
 
-工具不会重写 bag。GUI 设置可以保存在 sidecar JSON 中，无损导出仍由独立的导出器完成。
+工具不会重写 bag。GUI 布局和设置可以保存在独立的工作区 JSON 中，无损导出仍由独立的导出器完成。
 
 ## 真实 Bag，真实画面
 

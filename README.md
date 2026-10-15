@@ -2,7 +2,7 @@
 
 English | [简体中文](README.zh-CN.md)
 
-[![Release](https://img.shields.io/badge/release-v1.6.2-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/releases)
+[![Version](https://img.shields.io/badge/version-v1.6.3-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/tree/v1.6.3)
 ![Python](https://img.shields.io/badge/python-3.10--3.13-3776ab)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-4c1)](LICENSE)
 ![GUI](https://img.shields.io/badge/GUI-active_development-ef4444)
@@ -46,7 +46,7 @@ Restart the terminal after `install.bat` if the `bagel` command is not immediate
 | Visualize | Timeline scrubbing, image playback, split views, lane-line overlays, point-cloud previews, and light/dark themes |
 | Stay offline | Read rosbag1 and rosbag2 through `rosbags`; fall back to SQLite for raw ROS 2 access |
 
-Bag files are never rewritten. GUI settings can be stored in a sidecar JSON file, while lossless exports stay on their dedicated exporter path.
+Bag files are never rewritten. GUI layouts and settings can be saved in a separate workspace JSON file, while lossless exports stay on their dedicated exporter path.
 
 ## Real Bag, Real Frames
 

@@ -318,6 +318,45 @@ class WorkflowGuiTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     validate_workspace(damaged)
 
+    def test_workspace_restore_cancels_previous_message_step(self):
+        from rosbagel.gui.workspace import restore_workspace, workspace_snapshot
+        viewer = self.viewer
+        inspector = viewer.workflows.inspector
+        inspector.reload(0)
+        self.wait(lambda: inspector.record is not None)
+        saved = workspace_snapshot(viewer)
+        saved["time_sec"] = .25
+        started, release = Event(), Event()
+
+        def slow_step(reader, topic, stamp, direction, context):
+            started.set()
+            release.wait(3)
+            context.throw_if_cancelled()
+            return 100_000_000
+
+        try:
+            with patch("rosbagel.gui.inspector.adjacent_timestamp", side_effect=slow_step):
+                inspector.step(1)
+                self.wait(started.is_set)
+                restore_workspace(viewer, saved)
+                release.set()
+                self.wait(lambda: not viewer._io_tasks.busy)
+            self.assertEqual(viewer.time_input.value(), .25)
+        finally:
+            release.set()
+
+    def test_detaching_final_main_view_respects_workspace_view_limit(self):
+        from rosbagel.gui.workspace import validate_workspace, workspace_snapshot
+        viewer = self.viewer
+        pane = viewer._panes[0]
+        for _ in range(15):
+            viewer.duplicate_pane_window(pane)
+        viewer.detach_pane(pane)
+        self.assertEqual(len(viewer._all_panes()), 16)
+        self.assertIn(pane, viewer._panes)
+        self.assertIn("16", self.errors[-1])
+        validate_workspace(workspace_snapshot(viewer))
+
     def test_workspace_save_and_open_dialog_restore_detached_view(self):
         viewer = self.viewer
         viewer.assign_topic_to_pane(viewer._panes[0], "/front")
@@ -453,7 +492,7 @@ class WorkflowGuiTests(unittest.TestCase):
     def test_close_bag_clears_workflows_and_recent_list_is_deduplicated(self):
         viewer = self.viewer
         viewer.workflows.on_bag()
-        self.assertEqual(viewer.workflows.recent_paths(), ["fake.bag"])
+        self.assertEqual(viewer.workflows.recent_paths(), [str(Path("fake.bag").resolve())])
         viewer.workflows.close_bag()
         self.wait(lambda: not viewer._io_tasks.busy)
         self.assertIsNone(viewer.session.reader)

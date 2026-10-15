@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ROSBagel"
-version = "1.6.2"
+version = "1.6.3"
 description = "Windows-first offline ROS 1/2 bag inspection, export, and timeline visualization."
 readme = "README.md"
 requires-python = ">=3.10"

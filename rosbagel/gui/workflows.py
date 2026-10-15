@@ -165,7 +165,7 @@ class GuiWorkflows:
         self.refresh_report()
         self.set_enabled(True)
         recent = self.recent_paths()
-        path = str(viewer.session.bag_path)
+        path = str(viewer.session.bag_path.resolve())
         recent = [path] + [item for item in recent if item != path]
         viewer._update_settings.setValue("files/recent", json.dumps(recent[:10]))
         self.refresh_recent()

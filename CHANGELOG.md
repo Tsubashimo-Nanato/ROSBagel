@@ -4,6 +4,8 @@ All notable changes for this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-10-15
+
 ### Added
 
 - GUI Analysis workflows: background bag scans, searchable coverage/frequency/format reports, manifest/topic CSV saves, nearest-message comparisons and topic duration.
@@ -20,6 +22,9 @@ All notable changes for this project will be documented in this file.
 
 ### Fixed
 
+- Save absolute recent-bag paths so reopening is independent of the terminal's working directory.
+- Cancel previous analysis/message-navigation jobs before restoring a workspace, preventing stale callbacks from changing the restored timeline.
+- Enforce the 16-view limit when detaching the final main view, keeping saved workspaces reloadable.
 - Preserve the current bag when a new open fails; stop timers and discard stale tasks on topic replacement or window close.
 - Render every selected generic point-cloud topic, with independent visibility, color, size, decimation, opacity, and time offset. Initialize VisPy through its PySide6 backend.
 - Keep subsecond timelines accurate, pause when stepping/seeking, and use elapsed time for playback rate. Refilling an image cache no longer recursively renders or blocks the Qt thread; short final windows can seek backward.

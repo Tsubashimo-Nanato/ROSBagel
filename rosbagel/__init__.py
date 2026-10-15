@@ -18,4 +18,4 @@ __all__ = [
     "TopicInfo",
 ]
 
-__version__ = "1.6.2"
+__version__ = "1.6.3"

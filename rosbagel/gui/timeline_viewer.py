@@ -390,6 +390,9 @@ class TimelineViewer:
             return
         if pane not in self._panes:
             return
+        if len(self._panes) == 1 and len(self._all_panes()) >= 16:
+            self._show_warning("Close a view before detaching the last main view (16-view limit).")
+            return
         self._maximized_pane = None
         self._panes.remove(pane)
         self.view_layout.remove(pane)

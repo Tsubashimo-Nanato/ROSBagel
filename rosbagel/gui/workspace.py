@@ -113,6 +113,7 @@ def restore_workspace(viewer: Any, data: dict[str, Any]) -> None:
     saved = PreviewSessionSettings.from_dict(data.get("settings", {}))
     viewer.settings.topics.update({key: value for key, value in saved.topics.items() if key in available})
     viewer._pause_playback()
+    viewer.workflows.clear_tasks()
     viewer._maximized_pane = None
     viewer._set_theme(data.get("theme", "dark"))
     for pane in viewer._all_panes():
