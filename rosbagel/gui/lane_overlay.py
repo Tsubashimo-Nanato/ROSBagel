@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from rosbagel.gui.theme import tinted_standard_icon
+
 from rosbagel.core.lane_lines import (
     LANE_ROLES,
     LaneBounds,
@@ -18,6 +20,7 @@ LANE_COLORS = {
     "left": "#2f80ed",
     "right": "#eb5757",
 }
+LANE_LIGHT_COLORS = {"center": "#946000", "left": "#175eac", "right": "#b72d40"}
 LANE_PLOT_FIT_MARGIN_PX = 10.0
 LANE_PLOT_HELP_TEXT = (
     "Wheel: zoom\n"
@@ -45,6 +48,7 @@ def create_lane_overlay_panel_class(
             }
             self._data: LaneOverlayData | None = None
             self._visible_roles: set[str] = set()
+            self._display_settings: dict[str, tuple[bool, float, float]] = {}
             self._timestamp_ns: int | None = None
             self._data_bounds: LaneBounds | None = None
             self._view_bounds: LaneBounds | None = None
@@ -55,7 +59,7 @@ def create_lane_overlay_panel_class(
             self._pan_start_bounds: LaneBounds | None = None
             self.setFont(QtGui.QFont("Segoe UI", 9))
             self.setMouseTracking(True)
-            self.setMinimumSize(300, 180)
+            self.setMinimumSize(260, 150)
 
         @property
         def current_timestamp_ns(self) -> int | None:
@@ -87,6 +91,13 @@ def create_lane_overlay_panel_class(
             if self._swap_xy == swapped:
                 return
             self._swap_xy = swapped
+            self._refresh_bounds()
+            self.update()
+
+        def set_display_settings(self, settings: dict[str, tuple[bool, float, float]]) -> None:
+            if settings == self._display_settings:
+                return
+            self._display_settings = settings
             self._refresh_bounds()
             self.update()
 
@@ -133,8 +144,11 @@ def create_lane_overlay_panel_class(
                 return
 
             mapper = self._point_mapper(plot_rect, bounds)
+            painter.save()
+            painter.setClipRect(plot_rect)
             for series, frame in frame_items:
                 self._draw_frame(painter, mapper, series, frame)
+            painter.restore()
             self._draw_legend(painter, plot_rect, frame_items)
             self._draw_axes(painter, plot_rect, bounds)
             painter.end()
@@ -211,7 +225,10 @@ def create_lane_overlay_panel_class(
             for series in self._data.ordered_series(LANE_ROLES):
                 if series.role not in self._visible_roles:
                     continue
-                frame = series.nearest_frame(self._timestamp_ns)
+                visible, _opacity, offset = self._display_settings.get(series.role, (True, 1.0, 0.0))
+                if not visible:
+                    continue
+                frame = series.nearest_frame(self._timestamp_ns + round(offset * 1e9))
                 if frame is not None:
                     frames.append((series, frame))
             return frames
@@ -499,7 +516,7 @@ def create_lane_overlay_panel_class(
         ) -> None:
             if not frame.points:
                 return
-            color = QtGui.QColor(LANE_COLORS[series.role])
+            color = self._series_color(series.role)
             painter.setPen(QtGui.QPen(color, 2))
             if len(frame.points) > 1:
                 path = QtGui.QPainterPath(map_point(frame.points[0]))
@@ -522,13 +539,13 @@ def create_lane_overlay_panel_class(
             painter.setPen(QtGui.QColor(self._palette["text"]))
             if self._timestamp_ns is not None:
                 painter.drawText(
-                    QtCore.QRectF(left, top, plot_rect.width() - 16, 18),
+                    QtCore.QRectF(left, 0, plot_rect.width() - 20, 18),
                     QtCore.Qt.AlignmentFlag.AlignRight,
                     f"{self._timestamp_ns} ns",
                 )
             for index, (series, frame) in enumerate(frame_items):
                 y = top + 2.0 + (index * 20.0)
-                color = QtGui.QColor(LANE_COLORS[series.role])
+                color = self._series_color(series.role)
                 painter.setBrush(color)
                 painter.setPen(QtGui.QPen(color, 1))
                 painter.drawEllipse(QtCore.QPointF(left + 5.0, y + 7.0), 4.0, 4.0)
@@ -538,6 +555,12 @@ def create_lane_overlay_panel_class(
                     QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter,
                     f"{series.role}: {len(frame.points)} pts",
                 )
+
+        def _series_color(self, role: str) -> Any:
+            colors = LANE_LIGHT_COLORS if QtGui.QColor(self._palette["viewer_bg"]).lightness() > 128 else LANE_COLORS
+            color = QtGui.QColor(colors[role])
+            color.setAlphaF(self._display_settings.get(role, (True, 1.0, 0.0))[1])
+            return color
 
         def resizeEvent(self, event: Any) -> None:
             super().resizeEvent(event)
@@ -588,6 +611,12 @@ def create_lane_overlay_panel_class(
             self.swap_axes_button.setToolTip("Swap x/y axes")
             self.swap_axes_button.toggled.connect(self._axes_changed)
             check_row.addWidget(self.swap_axes_button)
+            self.fit_button = QtWidgets.QToolButton()
+            self.fit_button.setAccessibleName("Fit lane lines")
+            self.fit_button.setToolTip("Fit current lane points to the view")
+            self.fit_button.setFixedSize(28, 26)
+            self.fit_button.clicked.connect(lambda: self.plot.reset_view())
+            check_row.addWidget(self.fit_button)
             self.help_button = QtWidgets.QToolButton()
             self.help_button.setObjectName("lanePlotHelpIndicator")
             self.help_button.setText("?")
@@ -611,6 +640,7 @@ def create_lane_overlay_panel_class(
         def apply_theme(self, palette: dict[str, str]) -> None:
             self.status_label.setStyleSheet(f"color: {palette['muted']};")
             self.plot.apply_theme(palette)
+            self.fit_button.setIcon(tinted_standard_icon(QtGui, self, QtWidgets.QStyle.StandardPixmap.SP_BrowserReload, palette))
 
         def set_swap_xy(self, swapped: bool) -> None:
             self.swap_axes_button.blockSignals(True)

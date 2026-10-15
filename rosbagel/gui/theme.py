@@ -45,7 +45,7 @@ def theme_palette(theme: str) -> dict[str, str]:
         "border": "#c7ccd4",
         "button": "#f5f7fa",
         "button_hover": "#e9edf3",
-        "accent": "#d97706",
+        "accent": "#995000",
         "highlight_text": "#ffffff",
         "progress": "#d97706",
     }
@@ -75,8 +75,6 @@ def theme_stylesheet(palette: dict[str, str]) -> str:
         }}
         QDockWidget {{
             color: {palette['text']};
-            titlebar-close-icon: none;
-            titlebar-normal-icon: none;
         }}
         QDockWidget::title {{
             background: {palette['panel']};
@@ -150,29 +148,16 @@ def theme_stylesheet(palette: dict[str, str]) -> str:
             border-bottom: 1px solid {palette['border']};
             padding: 4px 6px;
         }}
-        QTreeWidget::branch {{
-            background: transparent;
-        }}
         QTreeWidget::item:selected {{
             background: {palette['accent']};
             color: {palette['highlight_text']};
         }}
-        QTreeWidget::item:hover {{
+        QTreeWidget::item:hover:!selected {{
             background: {palette['button_hover']};
         }}
         QTreeWidget::indicator {{
             width: 14px;
             height: 14px;
-            border: 1px solid {palette['border']};
-            border-radius: 3px;
-            background: {palette['panel_alt']};
-        }}
-        QTreeWidget::indicator:unchecked:hover {{
-            border-color: {palette['accent']};
-        }}
-        QTreeWidget::indicator:checked {{
-            background: {palette['accent']};
-            border-color: {palette['accent']};
         }}
         QCheckBox {{
             background: transparent;
@@ -182,13 +167,6 @@ def theme_stylesheet(palette: dict[str, str]) -> str:
         QCheckBox::indicator {{
             width: 14px;
             height: 14px;
-            border: 1px solid {palette['border']};
-            border-radius: 3px;
-            background: {palette['input']};
-        }}
-        QCheckBox::indicator:checked {{
-            background: {palette['accent']};
-            border-color: {palette['accent']};
         }}
         QPushButton, QToolButton {{
             background: {palette['button']};
@@ -197,8 +175,19 @@ def theme_stylesheet(palette: dict[str, str]) -> str:
             border-radius: 4px;
             padding: 3px 8px;
         }}
+        QToolButton {{
+            padding: 2px;
+        }}
         QPushButton:hover, QToolButton:hover {{
             background: {palette['button_hover']};
+        }}
+        QToolButton:checked {{
+            background: {palette['accent']};
+            color: {palette['highlight_text']};
+        }}
+        QPushButton:focus, QToolButton:focus, QLineEdit:focus,
+        QDoubleSpinBox:focus, QComboBox:focus {{
+            border: 1px solid {palette['accent']};
         }}
         QPushButton:disabled, QToolButton:disabled {{
             color: {palette['muted']};
@@ -264,6 +253,65 @@ def theme_stylesheet(palette: dict[str, str]) -> str:
             border-radius: 7px;
         }}
     """
+
+
+def tinted_standard_icon(QtGui: Any, widget: Any, symbol: Any, palette: dict[str, str]) -> Any:
+    source = widget.style().standardIcon(symbol).pixmap(16, 16)
+    icon = QtGui.QIcon()
+    for mode, color in ((QtGui.QIcon.Mode.Normal, palette["text"]),
+                        (QtGui.QIcon.Mode.Disabled, palette["muted"])):
+        pixmap = source.copy()
+        painter = QtGui.QPainter(pixmap)
+        painter.setCompositionMode(QtGui.QPainter.CompositionMode.CompositionMode_SourceIn)
+        painter.fillRect(pixmap.rect(), QtGui.QColor(color))
+        painter.end()
+        icon.addPixmap(pixmap, mode)
+    return icon
+
+
+def create_gui_style(QtWidgets: Any, QtCore: Any, QtGui: Any) -> Any:
+    class GuiStyle(QtWidgets.QProxyStyle):
+        def drawPrimitive(self, element: Any, option: Any, painter: Any, widget: Any = None) -> None:
+            if element == QtWidgets.QStyle.PrimitiveElement.PE_IndicatorBranch:
+                if not option.state & QtWidgets.QStyle.StateFlag.State_Children:
+                    return
+                center = QtCore.QPointF(option.rect.center())
+                offsets = ((-4, -2), (4, -2), (0, 3)) if option.state & QtWidgets.QStyle.StateFlag.State_Open else ((-2, -4), (-2, 4), (3, 0))
+                painter.save()
+                painter.setPen(QtCore.Qt.PenStyle.NoPen)
+                painter.setBrush(option.palette.text())
+                painter.drawPolygon(QtGui.QPolygonF([center + QtCore.QPointF(x, y) for x, y in offsets]))
+                painter.restore()
+                return
+            if element not in (QtWidgets.QStyle.PrimitiveElement.PE_IndicatorCheckBox,
+                               QtWidgets.QStyle.PrimitiveElement.PE_IndicatorItemViewItemCheck):
+                super().drawPrimitive(element, option, painter, widget)
+                return
+            checked = bool(option.state & QtWidgets.QStyle.StateFlag.State_On)
+            mixed = bool(option.state & QtWidgets.QStyle.StateFlag.State_NoChange)
+            palette = option.palette
+            painter.save()
+            painter.setRenderHint(QtGui.QPainter.RenderHint.Antialiasing)
+            rect = QtCore.QRectF(option.rect).adjusted(1, 1, -1, -1)
+            painter.setPen(QtGui.QPen(palette.color(QtGui.QPalette.ColorRole.Mid), 1))
+            painter.setBrush(palette.highlight() if checked or mixed else palette.base())
+            painter.drawRoundedRect(rect, 2, 2)
+            if checked or mixed:
+                painter.setPen(QtGui.QPen(palette.highlightedText(), 1.8))
+                if mixed:
+                    painter.drawLine(rect.topLeft() + QtCore.QPointF(3, rect.height() / 2),
+                                     rect.topRight() + QtCore.QPointF(-3, rect.height() / 2))
+                else:
+                    painter.drawPolyline(QtGui.QPolygonF([
+                        QtCore.QPointF(rect.left() + rect.width() * .2, rect.top() + rect.height() * .5),
+                        QtCore.QPointF(rect.left() + rect.width() * .43, rect.top() + rect.height() * .75),
+                        QtCore.QPointF(rect.left() + rect.width() * .82, rect.top() + rect.height() * .25),
+                    ]))
+            painter.restore()
+
+    style = GuiStyle(QtWidgets.QStyleFactory.create("Fusion"))
+    style.setObjectName("rosbagel")
+    return style
 
 
 def local_changelog_text() -> str:

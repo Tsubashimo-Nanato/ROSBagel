@@ -4,18 +4,47 @@ All notable changes for this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-10-15
+
 ### Added
 
+- GUI Analysis workflows: background bag scans, searchable coverage/frequency/format reports, manifest/topic CSV saves, nearest-message comparisons and topic duration.
+- Structured-message inspector with bounded field/raw previews, previous/next message navigation, full JSON saves, and numeric-field plotting.
+- Generic multi-topic numeric charts with editable field paths, up to 16 series, bounded full-range extrema sampling, timeline seeking, pan/zoom/fit, and PNG/CSV saves.
+- Versioned GUI workspace files restoring split layouts, detached views, topic settings, chart fields and time; recent bags and Close bag actions.
+- Batch GUI exports with shared, per-topic or scan-based suggested formats, select-all/clear, and results/warnings tables. View image capture is available from the view context menu.
+- GUI bag-file picker, layout reset, point-fit controls, per-topic display editing, and a software XY point-cloud renderer.
+- Local splitter resizing, view-title drag/drop indicators, and moving views between detached windows and the main layout.
+- Background bag opening, previews, bounded image loading, and cancellable exports with checked-topic preselection.
 - Added shell completion for `scan --all`, `scan --out`, and output paths.
 - Added the interactive `manifest` command with bag path, backend, and output-path completion.
 - Expanded the shell welcome with the current version, author, license, and repository.
 
 ### Fixed
 
+- Save absolute recent-bag paths so reopening is independent of the terminal's working directory.
+- Cancel previous analysis/message-navigation jobs before restoring a workspace, preventing stale callbacks from changing the restored timeline.
+- Enforce the 16-view limit when detaching the final main view, keeping saved workspaces reloadable.
+- Preserve the current bag when a new open fails; stop timers and discard stale tasks on topic replacement or window close.
+- Render every selected generic point-cloud topic, with independent visibility, color, size, decimation, opacity, and time offset. Initialize VisPy through its PySide6 backend.
+- Keep subsecond timelines accurate, pause when stepping/seeking, and use elapsed time for playback rate. Refilling an image cache no longer recursively renders or blocks the Qt thread; short final windows can seek backward.
+- Honor the newest seek and color settings while a load is in flight; explicit image cancellation waits for a retry. Preserve equal XY scale when resizing a manually panned or zoomed software point view.
+- Show relevant properties only, synchronize lane checkboxes, retain tree expansion across searches, and keep checked/unchecked indicators, tree arrows, and icons legible in both themes.
+- Split only the target view and restore valid active views and minimum sizes after closing or redocking. New window now moves the original pane; duplication remains a separate context-menu action.
+
 - Report invalid or unreadable bag paths as concise command errors instead of Python tracebacks.
 - Keep the interactive shell open after malformed quoted input and report the parse error inline.
 - Keep split views inside the `1280x760` default layout with compact, accessible topic and pane controls.
 - Use one coordinate transform for lane-line points, tick labels, and zero axes while preserving equal x/y scale and fit margin.
+
+### Removed
+
+- Removed synchronous image/export loops and their GUI event-pumping progress helper. Preview and export IO now share one worker thread, including SQLite reader cleanup.
+
+### Changed
+
+- The timeline is now a global control bar and remains usable on analysis pages. Lane overlay is opt-in through Windows instead of opening automatically for AIformula bags.
+- The GUI's Save sidecar action is replaced by Save workspace with an explicit destination. Existing core display-settings serialization remains unchanged; source bags are not used as the default workspace output location.
 
 ## [1.6.2] - 2026-07-14
 

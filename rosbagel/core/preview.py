@@ -179,10 +179,11 @@ class PreviewService:
         timestamp_ns: int,
         *,
         max_points: int = 20_000,
+        cancellation_token: CancellationToken | None = None,
     ) -> PointCloudPreview | None:
         import numpy as np
 
-        record = self.nearest_record(topic, timestamp_ns)
+        record = self.nearest_record(topic, timestamp_ns, cancellation_token=cancellation_token)
         if record is None or record.decoded is None:
             return None
         fields = expanded_point_field_names(record.decoded)
@@ -191,14 +192,19 @@ class PreviewService:
         xyz: list[list[float]] = []
         color_values: list[float] = []
         for index, row in enumerate(iter_point_cloud_rows(record.decoded)):
+            if cancellation_token is not None:
+                cancellation_token.throw_if_cancelled()
             if index % stride != 0:
                 continue
             values = dict(zip(fields, expanded_point_row(record.decoded, row)))
-            xyz.append([
+            point = [
                 float(values.get("x", 0.0) or 0.0),
                 float(values.get("y", 0.0) or 0.0),
                 float(values.get("z", 0.0) or 0.0),
-            ])
+            ]
+            if not all(math.isfinite(value) for value in point):
+                continue
+            xyz.append(point)
             color_source = values.get("intensity", values.get("rgb", values.get("rgba")))
             if isinstance(color_source, (int, float)):
                 color_values.append(float(color_source))
@@ -206,7 +212,7 @@ class PreviewService:
             topic=record.topic,
             timestamp_ns=record.timestamp_ns,
             fields=fields,
-            points=np.asarray(xyz, dtype=np.float32),
+            points=np.asarray(xyz, dtype=np.float32).reshape(-1, 3),
             color_values=np.asarray(color_values, dtype=np.float32) if color_values else None,
             original_point_count=original_count,
             preview_point_count=len(xyz),

@@ -2,7 +2,7 @@
 
 [English](README.md) | 简体中文
 
-[![Release](https://img.shields.io/badge/release-v1.6.2-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/releases)
+[![Version](https://img.shields.io/badge/version-v1.6.3-f59e0b)](https://github.com/Tsubashimo-Nanato/ROSBagel/tree/v1.6.3)
 ![Python](https://img.shields.io/badge/python-3.10--3.13-3776ab)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-4c1)](LICENSE)
 ![GUI](https://img.shields.io/badge/GUI-active_development-ef4444)
@@ -46,7 +46,7 @@ install.bat gui
 | 可视化 | 时间线拖动、图像播放、分屏、车道线叠加、点云预览和明暗主题 |
 | 保持离线 | 通过 `rosbags` 读取 rosbag1/rosbag2；必要时使用 SQLite 读取原始 ROS 2 数据 |
 
-工具不会重写 bag。GUI 设置可以保存在 sidecar JSON 中，无损导出仍由独立的导出器完成。
+工具不会重写 bag。GUI 布局和设置可以保存在独立的工作区 JSON 中，无损导出仍由独立的导出器完成。
 
 ## 真实 Bag，真实画面
 
@@ -108,9 +108,24 @@ bagel upgrade --yes
 
 ## GUI 开发状态
 
-时间线查看器是面向 Windows 的离线可视化工作区。目前开发重点包括可预测的 topic 分配、分屏、受限大小的图像播放缓存、车道线与点云导航，以及稳定的 dock 面板行为。
+GUI 仍在积极开发中。从 **File** 打开 bag 文件夹或文件后，双击 topic，或将选择项拖入 view。勾选的 topic 可以一起拖动；点云在同一视图叠加，不兼容的 topic 分别打开。
 
-它有意保持只读：这不是实时 ROS subscriber、recorder、节点图检查器或完整的 RViz2 替代品。可选的 3D 点云渲染还依赖可用的 VisPy/OpenGL 环境；即使该环境不可用，应用的其余部分仍可使用。
+- **+** 只分割当前视图，分隔条可调整大小。拖动标题可以重排、独立成窗或拖回其他视图旁，放置区域会高亮。**New window** 移动原视图，右键菜单的 **Duplicate window** 创建副本。
+- 拖动时间线、播放和单步共用同一时间位置。图像加载和导出在后台执行，每个图像缓存最多 300 帧，并设有 96 MiB 内存预算，允许最后接纳的一帧略微超出预算。
+- **Properties** 修改所选 topic 的可见性、透明度和时间偏移；普通点云还可调整颜色、点大小和采样密度。平移或缩放后，用 **Fit** 恢复自动取景。
+- 时间线上的 **Dark mode** 切换明暗主题；**Windows > Reset layout** 恢复隐藏面板。导出对话框自动选中左侧已勾选的 topic。
+
+**Analysis** 补齐离线分析工作流：
+
+- **Bag report / Scan bag**：查看消息数量、覆盖时段、平均频率、兼容导出格式和警告，保存 manifest 或 CSV。**Inspect all at current time** 比较各话题最近消息的时间偏差。
+- **Message inspector**：搜索消息字段、查看原始字节、前后逐条定位、保存完整消息 JSON。选择数值字段即可绘图，也可通过 **Numeric chart** 的 **+** 手动输入字段路径。
+- **Numeric chart**：最多叠加 16 个跨话题字段，按完整时间范围保留极值采样；支持时间游标、平移、缩放、自动取景和 PNG/CSV 保存。CSV 保存的是图中的采样点，逐条完整数据请使用 topic 导出。
+- **File > Save/Open workspace**：恢复分屏、独立窗口、勾选话题、显示设置、图表字段和时间位置。File 还提供最近打开和 Close bag；工作区文件与源 bag 分开保存。
+- **Export**：统一格式、每话题单独格式，或扫描后使用 core 推荐的格式组合；结果及警告显示在 Bag analysis。Select all 选择完整话题列表。
+
+切换分析页面后，全局时间线仍可操作。AIformula 车道线 dock 在 **Windows** 中按需打开，普通 ROS 消息不依赖它。右键 view 可以进入消息检查或保存视图图片。
+
+它有意保持只读：这不是实时 ROS subscriber、recorder、节点图检查器或完整的 RViz2 替代品。可选 3D 渲染依赖 VisPy/OpenGL；无法初始化时（包括离屏环境），使用可平移、缩放的 XY 点云投影。
 
 直接启动 GUI：
 

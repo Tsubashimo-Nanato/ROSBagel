@@ -158,6 +158,32 @@ class PreviewTests(unittest.TestCase):
         self.assertFalse(loaded.topics["/speed"].visible)
         self.assertEqual(loaded.topics["/speed"].export_format, "csv")
 
+    def test_point_preview_filters_nonfinite_points_and_keeps_empty_shape(self) -> None:
+        import struct
+
+        for points, expected in (
+            ([(1.0, 2.0, 3.0), (float("nan"), 0.0, 0.0), (0.0, float("inf"), 0.0)], 1),
+            ([(float("nan"), 0.0, 0.0)], 0),
+        ):
+            with self.subTest(expected=expected):
+                cloud = FakePointCloud2(len(points), 1,
+                    [FakePointField("x", 0, 7), FakePointField("y", 4, 7), FakePointField("z", 8, 7)],
+                    False, 12, len(points) * 12, b"".join(struct.pack("<fff", *point) for point in points))
+                session = Session()
+                session.reader = FakeReader([MessageRecord("/points", 100, "sensor_msgs/msg/PointCloud2", decoded=cloud)])
+                session.topics = [TopicInfo("/points", "sensor_msgs/msg/PointCloud2", category="point_cloud")]
+                result = PreviewService(session).point_cloud_preview("/points", 100)
+                self.assertEqual(result.points.shape, (expected, 3))
+                self.assertEqual(result.preview_point_count, expected)
+                self.assertEqual(result.original_point_count, len(points))
+
+    def test_point_preview_propagates_cancellation(self) -> None:
+        preview = PreviewService(_session())
+        token = CancellationToken.create()
+        token.cancel()
+        with self.assertRaises(CancelledError):
+            preview.point_cloud_preview("/speed", 100, cancellation_token=token)
+
     def test_cancellation_token_raises(self) -> None:
         token = CancellationToken.create()
         token.cancel()

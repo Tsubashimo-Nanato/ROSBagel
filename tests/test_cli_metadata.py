@@ -69,6 +69,8 @@ class CliMetadataTests(unittest.TestCase):
         metadata = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
 
         self.assertEqual(rosbagel.__version__, metadata["project"]["version"])
+        for filename in ("README.md", "README.zh-CN.md"):
+            self.assertIn(f"/tree/v{rosbagel.__version__})", (root / filename).read_text(encoding="utf-8"))
         self.assertEqual(metadata["project"]["name"], "ROSBagel")
         self.assertEqual(metadata["project"]["authors"], [{"name": "Owen ZI-WEN ZHOU"}])
         self.assertEqual(metadata["project"]["maintainers"], [{"name": "Owen ZI-WEN ZHOU"}])
